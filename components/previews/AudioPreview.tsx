@@ -10,6 +10,7 @@ import DownloadButtonGroup from '../DownloadBtnGtoup'
 import { DownloadBtnContainer, PreviewContainer } from './Containers'
 import { LoadingIcon } from '../Loading'
 import { formatModifiedDateTime } from '../../utils/fileDetails'
+import { getStoredToken } from '../../utils/protectedRouteHandler'
 
 enum PlayerState {
   Loading,
@@ -21,19 +22,21 @@ enum PlayerState {
 const AudioPreview: FC<{ file: OdFileObject }> = ({ file }) => {
   const { t } = useTranslation()
   const { asPath } = useRouter()
+  const hashedToken = getStoredToken(asPath)
 
   const rapRef = useRef<ReactAudioPlayer>(null)
   const [playerStatus, setPlayerStatus] = useState(PlayerState.Loading)
+  const [playerVolume, setPlayerVolume] = useState(1)
 
   // Render audio thumbnail, and also check for broken thumbnails
-  const thumbnail = `/api/thumbnail?path=${asPath}&size=medium`
+  const thumbnail = `/api/thumbnail/?path=${asPath}&size=medium${hashedToken ? `&odpt=${hashedToken}` : ''}`
   const [brokenThumbnail, setBrokenThumbnail] = useState(false)
 
   useEffect(() => {
     // Manually get the HTML audio element and set onplaying event.
     // - As the default event callbacks provided by the React component does not guarantee playing state to be set
     // - properly when the user seeks through the timeline or the audio is buffered.
-    const rap = (rapRef.current as ReactAudioPlayer).audioEl.current
+    const rap = rapRef.current?.audioEl.current
     if (rap) {
       rap.oncanplay = () => setPlayerStatus(PlayerState.Ready)
       rap.onended = () => setPlayerStatus(PlayerState.Paused)
@@ -43,6 +46,7 @@ const AudioPreview: FC<{ file: OdFileObject }> = ({ file }) => {
       rap.onseeking = () => setPlayerStatus(PlayerState.Loading)
       rap.onwaiting = () => setPlayerStatus(PlayerState.Loading)
       rap.onerror = () => setPlayerStatus(PlayerState.Paused)
+      rap.onvolumechange = () => setPlayerVolume(rap.volume)
     }
   }, [])
 
@@ -92,17 +96,18 @@ const AudioPreview: FC<{ file: OdFileObject }> = ({ file }) => {
 
             <ReactAudioPlayer
               className="h-11 w-full"
-              src={file['@microsoft.graph.downloadUrl']}
+              src={`/api/raw/?path=${asPath}${hashedToken ? `&odpt=${hashedToken}` : ''}`}
               ref={rapRef}
               controls
               preload="auto"
+              volume={playerVolume}
             />
           </div>
         </div>
       </PreviewContainer>
 
       <DownloadBtnContainer>
-        <DownloadButtonGroup downloadUrl={file['@microsoft.graph.downloadUrl']} />
+        <DownloadButtonGroup />
       </DownloadBtnContainer>
     </>
   )
